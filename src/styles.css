@@ -1,0 +1,63 @@
+/* @zodal/speech: tune through the --zs-* tokens. The widget inherits the host's type. */
+:root {
+  --zs-ink: #1d1c1a; --zs-dim: #8a867d; --zs-rule: #e6e2d9; --zs-accent: #b5501e;
+  --zs-mark: #f6e3c7; --zs-bar: rgba(251, 250, 247, 0.94); --zs-shadow: rgba(0, 0, 0, 0.08);
+  --zs-paper: #fbfaf7; --zs-bar-offset: 9.3rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --zs-ink: #ece9e2; --zs-dim: #8d887e; --zs-rule: #2e2c28; --zs-accent: #f08a4b;
+    --zs-mark: #4a3420; --zs-bar: rgba(23, 22, 20, 0.94); --zs-shadow: rgba(0, 0, 0, 0.4);
+    --zs-paper: #171614;
+  }
+}
+.zs-player [hidden] { display: none !important; }
+.zs-player { position: relative; color: var(--zs-ink); }
+.zs-download { display: inline-block; color: var(--zs-accent); font-size: 0.92em; }
+.zs-text { margin-top: 1.6em; }
+.zs-text p { margin: 0 0 1.1em; }
+.zs-who { display: block; font-size: 0.68em; letter-spacing: 0.06em; text-transform: uppercase; color: var(--zs-dim); }
+.zs-s { cursor: pointer; border-radius: 4px; transition: color 0.25s; scroll-margin-bottom: var(--zs-bar-offset); }
+.zs-playing .zs-s { color: var(--zs-dim); }
+.zs-playing .zs-s.zs-on { color: var(--zs-ink); }
+@media (hover: hover) {
+  .zs-s:hover { text-decoration: underline; text-decoration-color: var(--zs-rule); text-underline-offset: 3px; }
+}
+.zs-w.zs-on { background: var(--zs-mark); border-radius: 3px; box-shadow: 0 0 0 2px var(--zs-mark); }
+.zs-bar {
+  bottom: 0; background: var(--zs-bar);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border-top: 1px solid var(--zs-rule); box-shadow: 0 -4px 16px var(--zs-shadow);
+  padding: 0.55rem 16px calc(0.7rem + env(safe-area-inset-bottom));
+}
+.zs-bar-sticky { position: sticky; }
+.zs-bar-fixed { position: fixed; left: 0; right: 0; }
+.zs-bar-in { max-width: 42rem; margin: 0 auto; }
+.zs-track { position: relative; height: 28px; }
+.zs-seek { width: 100%; margin: 0; height: 28px; accent-color: var(--zs-accent); }
+.zs-ghost {
+  position: absolute; top: 6px; width: 3px; height: 16px; margin-left: -1px; border-radius: 2px;
+  background: var(--zs-dim); opacity: 0; pointer-events: none;
+}
+.zs-dragging .zs-ghost { opacity: 0.7; }
+.zs-times { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--zs-dim); font-variant-numeric: tabular-nums; }
+.zs-dragging .zs-now { color: var(--zs-accent); }
+.zs-status { min-height: 1.2em; text-align: center; }
+.zs-status.zs-err { color: var(--zs-accent); }
+.zs-controls { display: flex; align-items: center; justify-content: center; gap: 1.4rem; margin-top: 0.15rem; }
+.zs-player button {
+  font: inherit; color: var(--zs-ink); background: none; border: 0; padding: 0.35rem; cursor: pointer;
+  min-height: 44px; border-radius: 999px; -webkit-tap-highlight-color: transparent;
+}
+.zs-player button:focus-visible, .zs-s:focus-visible { outline: 2px solid var(--zs-accent); outline-offset: 2px; }
+.zs-player button:disabled { opacity: 0.4; cursor: default; }
+.zs-player .zs-skip, .zs-player .zs-speed { font-size: 0.85rem; min-width: 3.2rem; font-variant-numeric: tabular-nums; }
+.zs-spacer { min-width: 3.2rem; }
+.zs-player .zs-play { width: 3.4rem; height: 3.4rem; background: var(--zs-ink); color: var(--zs-paper); display: grid; place-items: center; }
+.zs-play svg { width: 1.5rem; height: 1.5rem; fill: currentColor; }
+.zs-player .zs-follow {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--zs-bar-offset) + env(safe-area-inset-bottom));
+  background: var(--zs-ink); color: var(--zs-paper); padding: 0.45rem 1rem; font-size: 0.9rem;
+  box-shadow: 0 4px 14px var(--zs-shadow);
+}
+@media (prefers-reduced-motion: reduce) { .zs-s { transition: none; } }

@@ -1,0 +1,55 @@
+{
+  "name": "@zodal/speech",
+  "version": "0.1.0",
+  "description": "A zodal model and player for speech audio with a synced transcript: tap a sentence to play from it, scroll freely, return to now.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    },
+    "./core": {
+      "import": { "types": "./dist/core.d.ts", "default": "./dist/core.js" },
+      "require": { "types": "./dist/core.d.cts", "default": "./dist/core.cjs" }
+    },
+    "./vanilla": {
+      "import": { "types": "./dist/vanilla.d.ts", "default": "./dist/vanilla.js" },
+      "require": { "types": "./dist/vanilla.d.cts", "default": "./dist/vanilla.cjs" }
+    },
+    "./player.iife.js": "./dist/player.iife.js",
+    "./styles.css": "./dist/styles.css",
+    "./speech-track.schema.json": "./dist/speech-track.schema.json"
+  },
+  "publishConfig": { "access": "public" },
+  "files": ["dist", "skills"],
+  "scripts": {
+    "build": "tsup && node scripts/emit-schema.mjs",
+    "prepare": "tsup && node scripts/emit-schema.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "immer": "^10.1.1",
+    "zustand": "^5.0.3"
+  },
+  "peerDependencies": {
+    "@zodal/core": ">=0.2.0 <1.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@zodal/core": "^0.2.0",
+    "@zodal/ui": "^0.2.0",
+    "jsdom": "^26.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "zod": "^4.0.0"
+  },
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/i2mint/zodal-speech.git" },
+  "keywords": ["zodal", "speech", "audio", "transcript", "player", "tts"],
+  "packageManager": "pnpm@9.15.0"
+}
