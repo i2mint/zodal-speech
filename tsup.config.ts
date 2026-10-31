@@ -16,6 +16,8 @@ export default defineConfig([
     globalName: 'ZodalSpeech',
     outExtension: () => ({ js: '.iife.js' }),
     noExternal: [/.*/],
+    // A page has no `process`, and the bundled immer and zustand read it.
+    define: { 'process.env.NODE_ENV': '"production"' },
     minify: true,
     sourcemap: false,
     clean: false,
