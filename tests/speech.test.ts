@@ -52,6 +52,13 @@ describe('the model', () => {
     expect(SpeechTrackSchema.safeParse({ title: 'T', audio: { base64: 'AA==' }, cues: [] }).success).toBe(true);
   });
 
+  it('accepts a source with a link and refuses an unsafe one', () => {
+    const base = { title: 'T', audio: { src: 'a' }, cues: [] };
+    expect(parseSpeechTrack({ ...base, sources: ['x', { title: 'y', url: '/annals/d/1' }] }).sources.length).toBe(2);
+    expect(() => parseSpeechTrack({ ...base, sources: [{ title: 'y', url: 'javascript:x' }] })).toThrow();
+    expect(() => parseSpeechTrack({ ...base, sources: [{ title: 'y', url: '//evil.test' }] })).toThrow();
+  });
+
   it('refuses a track with no audio, saying so', () => {
     expect(() => parseSpeechTrack({ title: 'T', audio: {}, cues: [] })).toThrow(/Not a speech track/);
   });
@@ -164,6 +171,19 @@ describe('the DOM renderer', () => {
     mount();
     expect(host.querySelectorAll('.zs-text p').length).toBe(2);
     expect(host.querySelectorAll('.zs-s').length).toBe(3);
+  });
+
+  it('links its sources, in a new tab, and never a script link', () => {
+    mountSpeechPlayer(host, {
+      title: 'T',
+      audio: { src: 'a' },
+      cues: [],
+      sources: ['plain', { title: 'Doc', url: 'https://x.test/d/1' }, { title: 'Bad', url: 'javascript:alert(1)' }],
+    });
+    const links = [...host.querySelectorAll('.zs-sources a')] as HTMLAnchorElement[];
+    expect(links.map((a) => a.textContent)).toEqual(['Doc']);
+    expect(links[0].target).toBe('_blank');
+    expect(host.querySelector('.zs-sources')!.textContent).toContain('Bad');
   });
 
   it('names speakers only when there is more than one', () => {

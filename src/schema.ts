@@ -32,6 +32,15 @@ export const SpeechAudioSchema = z.union([
   z.object({ base64: z.string().min(1) }).strict(),
 ]);
 
+/** Only links a page can safely open: relative, or http(s). */
+const safeLink = z.string().regex(/^(https?:\/\/|\/(?!\/))/i, 'must be http(s) or start with one /');
+
+/** What a track was based on: a label, or a label with a link to it. */
+export const SpeechSourceSchema = z.union([
+  z.string().min(1),
+  z.object({ title: z.string().min(1), url: safeLink.optional() }).strict(),
+]);
+
 export const SpeechTrackSchema = z.object({
   title: z.string().min(1),
   subtitle: z.string().default(''),
@@ -40,7 +49,7 @@ export const SpeechTrackSchema = z.object({
   mime: z.string().default('audio/mpeg'),
   filename: z.string().default('speech.mp3'),
   cues: z.array(SpeechCueSchema),
-  sources: z.array(z.string()).default([]),
+  sources: z.array(SpeechSourceSchema).default([]),
 });
 
 /** How the player behaves. Bounded numbers, so zodal-dials can infer a settings surface. */
@@ -57,6 +66,7 @@ export const SpeechPlayerOptionsSchema = z.object({
 export type SpeechWord = z.infer<typeof SpeechWordSchema>;
 export type SpeechCue = z.infer<typeof SpeechCueSchema>;
 export type SpeechAudio = z.infer<typeof SpeechAudioSchema>;
+export type SpeechSource = z.infer<typeof SpeechSourceSchema>;
 export type SpeechTrack = z.infer<typeof SpeechTrackSchema>;
 export type SpeechTrackInput = z.input<typeof SpeechTrackSchema>;
 export type SpeechPlayerOptions = z.infer<typeof SpeechPlayerOptionsSchema>;
