@@ -14,6 +14,7 @@ export interface MountTrack {
   mime?: string;
   filename?: string;
   cues: ReadonlyArray<Partial<CueLike> & Pick<CueLike, 'start' | 'end' | 'text'>>;
+  sources?: ReadonlyArray<string | { title: string; url?: string }>;
 }
 
 export interface MountOptions {
@@ -66,6 +67,17 @@ function audioUrl(track: MountTrack): { url: string; revoke: () => void } {
   // A blob: URL, because every browser can seek in one.
   const url = URL.createObjectURL(new Blob([bytes], { type: track.mime ?? 'audio/mpeg' }));
   return { url, revoke: () => URL.revokeObjectURL(url) };
+}
+
+/** Links open in a new tab, which is also the only way out of a sandboxed frame. */
+function drawSources(sources: NonNullable<MountTrack['sources']>): HTMLElement {
+  const items = sources.map((source) => {
+    const { title, url } = typeof source === 'string' ? { title: source, url: undefined } : source;
+    // Checked here too, because a page may mount a track that was never parsed.
+    const safe = url && /^(https?:\/\/|\/(?!\/))/i.test(url);
+    return el('li', {}, safe ? el('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, title) : title);
+  });
+  return el('details', { class: 'zs-sources', open: '' }, el('summary', {}, 'Based on'), el('ul', {}, ...items));
 }
 
 /** One paragraph per segment, one span per sentence and per word. */
@@ -140,6 +152,7 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     ),
   );
   const root = el('div', { class: 'zs-player' }, text, followButton, bar, audio);
+  if (track.sources?.length) root.prepend(drawSources(track.sources));
   if (options.download && track.filename !== '') {
     const link = el('a', { class: 'zs-download', href: url, download: track.filename ?? 'speech.mp3' }, 'Download audio');
     root.prepend(link);
