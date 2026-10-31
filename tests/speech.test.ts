@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import vm from 'node:vm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toColumnDefs } from '@zodal/ui';
 import {
@@ -223,5 +225,14 @@ describe('the stylesheet', () => {
   it('never sets the host font on its root, and lets [hidden] win', () => {
     expect(css).not.toMatch(/\.zs-player\s*\{[^}]*font/);
     expect(css).toContain('[hidden] { display: none !important; }');
+  });
+});
+
+describe('the one-file bundle', () => {
+  const bundle = join(process.cwd(), 'dist/player.iife.js');
+  it.runIf(existsSync(bundle))('loads where there is no `process`, and exposes mount', () => {
+    const page = vm.createContext({});
+    vm.runInContext(`${readFileSync(bundle, 'utf8')};globalThis.got = typeof ZodalSpeech.mount;`, page);
+    expect((page as { got?: string }).got).toBe('function');
   });
 });
