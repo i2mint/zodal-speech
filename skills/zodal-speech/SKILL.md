@@ -16,7 +16,7 @@ Do not write another `<audio>` element with a hand-made transcript. Use this pac
 |---|---|
 | A page or app in the browser | `mountSpeechPlayer(host, track, options)` from `@zodal/speech/vanilla`, plus `@zodal/speech/styles.css` |
 | A React app | No React renderer yet. Build it over `createSpeechPlayer` from `@zodal/speech/core` and contribute it here |
-| A server writing a self-contained page | Inline `player.iife.js` and `styles.css`, then call `ZodalSpeech.mount(el, track, { bar: 'fixed', hotkeys: true })`. `briefsmith.player_html` in thorwhalen/hailing is the worked example |
+| A server writing a self-contained page | Inline `player.iife.js` and `styles.css`, then call `ZodalSpeech.mount(el, track, { hotkeys: true, download: true })`. `briefsmith.player_html` in thorwhalen/hailing is the worked example |
 | Python, or another language, producing tracks | Validate against `speech-track.schema.json`, generated from the Zod schema |
 | A list of tracks | `speechTrackCollection`, with `toColumnDefs` and a `DataProvider` |
 
@@ -24,7 +24,7 @@ Do not write another `<audio>` element with a hand-made transcript. Use this pac
 
 - **The Zod schema is the source of truth.** Change `src/schema.ts`; the JSON Schema is generated at build time.
 - **Inline the audio as `base64` in a sandboxed frame** (an annals document, for one). It has no origin, so it cannot fetch a sibling file.
-- **Embedded means `bar: 'sticky'` and `hotkeys: false`,** which are the defaults. Only a page that is nothing but the player takes `fixed` and `hotkeys`.
+- **The transport goes at the top (`bar: 'top'`, the default), embedded or not.** A host can cut off a widget's bottom (a frame taller than the screen did, in annals: the owner never saw Play), never its top. `sticky` / `fixed` (bottom) are for a page that owns the whole screen and wants a podcast-style bar. `hotkeys` stays off when embedded, because an embedded widget does not own the keyboard.
 - **Call `destroy()` when the host goes away.** The player listens on `window` and `document`.
 - **Cue timing comes from the writer.** The player does not align text to audio. `briefsmith.render_timed` does it in Python, and exact word times from a voice API can replace its estimate.
 

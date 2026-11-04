@@ -48,7 +48,7 @@ const columns = toColumnDefs(speechTrackCollection);
 
 ## Options
 
-`SpeechPlayerOptionsSchema` declares them: `speeds`, `skipBackS`, `skipAheadS`, `bar` (`sticky` stays inside its host, `fixed` owns the bottom of the page) and `hotkeys` (Space and the arrow keys, off by default, because an embedded widget does not own the keyboard). `mountSpeechPlayer` also takes `download` to offer the audio as a file.
+`SpeechPlayerOptionsSchema` declares them: `speeds`, `skipBackS`, `skipAheadS`, `bar` (`top`, the default, pins the transport to the top of the player: a host such as a frame taller than the screen can push a widget's bottom out of sight, never its top; `sticky` keeps it at the bottom of its host, `fixed` at the bottom of the window) and `hotkeys` (Space and the arrow keys, off by default, because an embedded widget does not own the keyboard). `mountSpeechPlayer` also takes `download` to offer the audio as a file, as an icon button in the transport (its tap is announced in the status line, since touch has no tooltip). Skips default to 10 seconds each way, and Play is never disabled: on iOS the first tap is what loads the audio.
 
 ## Another renderer
 

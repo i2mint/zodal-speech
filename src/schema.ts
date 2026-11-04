@@ -55,10 +55,11 @@ export const SpeechTrackSchema = z.object({
 /** How the player behaves. Bounded numbers, so zodal-dials can infer a settings surface. */
 export const SpeechPlayerOptionsSchema = z.object({
   speeds: z.array(z.number().positive()).min(1).default([1, 1.25, 1.5, 1.75, 2, 0.75]),
-  skipBackS: z.number().int().min(1).max(120).default(15),
-  skipAheadS: z.number().int().min(1).max(120).default(30),
+  skipBackS: z.number().int().min(1).max(120).default(10),
+  skipAheadS: z.number().int().min(1).max(120).default(10),
   /** `fixed` owns the bottom of the page; `sticky` stays inside its host. */
-  bar: z.enum(['sticky', 'fixed']).default('sticky'),
+  /** top: pinned to the top of the player (a host may hide its bottom); sticky / fixed: at the bottom. */
+  bar: z.enum(['top', 'sticky', 'fixed']).default('top'),
   /** Space and the arrow keys. Off by default: an embedded widget does not own the keyboard. */
   hotkeys: z.boolean().default(false),
 });

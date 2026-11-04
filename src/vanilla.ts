@@ -21,7 +21,13 @@ export interface MountOptions {
   speeds?: readonly number[];
   skipBackS?: number;
   skipAheadS?: number;
-  bar?: 'sticky' | 'fixed';
+  /**
+   * Where the transport sits. `'top'` (the default) pins it to the top of the player as the
+   * transcript scrolls: the top of a widget is on screen as soon as it is, while a host (a
+   * frame taller than the screen, a page above it) can push its bottom out of sight.
+   * `'sticky'` and `'fixed'` keep it at the bottom, of the player or of the window.
+   */
+  bar?: 'top' | 'sticky' | 'fixed';
   hotkeys?: boolean;
   /** Offers the audio as a download. */
   download?: boolean;
@@ -34,14 +40,19 @@ export interface MountedSpeechPlayer {
 }
 
 const DEFAULT_SPEEDS = [1, 1.25, 1.5, 1.75, 2, 0.75];
-const DEFAULT_SKIP_BACK_S = 15;
-const DEFAULT_SKIP_AHEAD_S = 30;
+const DEFAULT_SKIP_BACK_S = 10;
+const DEFAULT_SKIP_AHEAD_S = 10;
 /** How long after the page's own smooth scroll a scroll event is not a person's. */
 const OWN_SCROLL_MS = 900;
 const ARROW_SEEK_S = 5;
 const SCROLL_KEYS = ['PageUp', 'PageDown', 'Home', 'End'];
 const ICON_PLAY = 'M8 5v14l11-7z';
 const ICON_PAUSE = 'M6 5h4v14H6zM14 5h4v14h-4z';
+const ICON_DOWNLOAD = 'M12 3v11m0 0-4.5-4.5M12 14l4.5-4.5M4 17v3h16v-3';
+/** A circular arrow, turned back (counter-clockwise) or ahead; the seconds go inside it. */
+const ICON_BACK = 'M12 4a8 8 0 1 1-7.6 5.5M4.4 3.5v6h6';
+const ICON_AHEAD = 'M12 4a8 8 0 1 0 7.6 5.5M19.6 3.5v6h-6';
+const PAUSED_HINT = 'Tap any sentence to play from there.';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -53,6 +64,26 @@ function el<K extends keyof HTMLElementTagNameMap>(
   for (const [key, value] of Object.entries(props)) node.setAttribute(key, value);
   node.append(...children);
   return node;
+}
+
+/** An inline icon: `d` is a path, drawn filled or, with `stroke`, as a line. */
+function icon(d: string, opts: { stroke?: boolean; label?: string } = {}): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', d);
+  if (opts.stroke) {
+    for (const [k, v] of Object.entries({ fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })) path.setAttribute(k, v);
+  }
+  svg.append(path);
+  if (opts.label) {
+    const t = document.createElementNS(SVG_NS, 'text');
+    for (const [k, v] of Object.entries({ x: '12', y: '15.5', 'text-anchor': 'middle', 'font-size': '8', fill: 'currentColor' })) t.setAttribute(k, v);
+    t.textContent = opts.label;
+    svg.append(t);
+  }
+  return svg;
 }
 
 function normalise(cue: MountTrack['cues'][number]): CueLike {
@@ -131,32 +162,34 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
   const status = el('span', { class: 'zs-status', 'aria-live': 'polite' });
   const total = el('span', { class: 'zs-total' }, formatTime(cuesDuration(cues)));
   const speed = el('button', { class: 'zs-speed', type: 'button', 'aria-label': 'Playback speed' }, `${config.speeds[0]}×`);
-  const back = el('button', { class: 'zs-skip', type: 'button', 'aria-label': `Back ${config.skipBackS} seconds` }, `−${config.skipBackS}s`);
-  const ahead = el('button', { class: 'zs-skip', type: 'button', 'aria-label': `Ahead ${config.skipAheadS} seconds` }, `+${config.skipAheadS}s`);
-  const icon = document.createElementNS(SVG_NS, 'path');
-  icon.setAttribute('d', ICON_PLAY);
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.append(icon);
-  const play = el('button', { class: 'zs-play', type: 'button', 'aria-label': 'Play', disabled: '' }, svg);
+  const back = el('button', { class: 'zs-skip', type: 'button', 'aria-label': `Back ${config.skipBackS} seconds`, title: `Back ${config.skipBackS} s` }, icon(ICON_BACK, { stroke: true, label: String(config.skipBackS) }));
+  const ahead = el('button', { class: 'zs-skip', type: 'button', 'aria-label': `Ahead ${config.skipAheadS} seconds`, title: `Ahead ${config.skipAheadS} s` }, icon(ICON_AHEAD, { stroke: true, label: String(config.skipAheadS) }));
+  const playIcon = icon(ICON_PLAY);
+  const glyph = playIcon.querySelector('path') as SVGPathElement;
+  // Never disabled: on iOS the audio may not load until a tap, so the first tap is what starts it.
+  const play = el('button', { class: 'zs-play', type: 'button', 'aria-label': 'Play' }, playIcon);
   const followButton = el('button', { class: 'zs-follow', type: 'button', hidden: '' }, 'Back to now');
+  const where = options.bar ?? 'top';
+  const filename = track.filename ?? 'speech.mp3';
+  const download =
+    options.download && track.filename !== ''
+      ? el('a', { class: 'zs-download', href: url, download: filename, 'aria-label': 'Download audio', title: 'Download audio' }, icon(ICON_DOWNLOAD, { stroke: true }))
+      : el('span', { class: 'zs-download zs-none' });
   const bar = el(
     'div',
-    { class: `zs-bar zs-bar-${options.bar ?? 'sticky'}` },
+    { class: `zs-bar zs-bar-${where}` },
     el(
       'div',
       { class: 'zs-bar-in' },
+      el('div', { class: 'zs-controls' }, play, back, ahead, speed, el('span', { class: 'zs-gap' }), download),
       el('div', { class: 'zs-track' }, range, ghost),
       el('div', { class: 'zs-times' }, now, status, total),
-      el('div', { class: 'zs-controls' }, speed, back, play, ahead, el('span', { class: 'zs-spacer' })),
     ),
   );
-  const root = el('div', { class: 'zs-player' }, text, followButton, bar, audio);
-  if (track.sources?.length) root.prepend(drawSources(track.sources));
-  if (options.download && track.filename !== '') {
-    const link = el('a', { class: 'zs-download', href: url, download: track.filename ?? 'speech.mp3' }, 'Download audio');
-    root.prepend(link);
-  }
+  const root = el('div', { class: `zs-player zs-at-${where === 'top' ? 'top' : 'bottom'}` });
+  if (where === 'top') root.append(bar, followButton, text, audio);
+  else root.append(text, followButton, bar, audio);
+  if (track.sources?.length) root.append(drawSources(track.sources));
   host.append(root);
 
   // Everything added to something outside `root` goes through here, so destroy() can undo it.
@@ -165,6 +198,21 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     target.addEventListener(type, handler as EventListener, opts);
     undo.push(() => target.removeEventListener(type, handler as EventListener, opts));
   };
+
+  // The bar's real height, so a sentence scrolled to is never under it (it was a fixed guess).
+  const measure = () => root.style.setProperty('--zs-bar-offset', `${bar.offsetHeight}px`);
+  if (typeof ResizeObserver === 'function') {
+    const watch = new ResizeObserver(measure);
+    watch.observe(bar);
+    undo.push(() => watch.disconnect());
+  }
+  measure();
+  // A tap on Download has no tooltip to read on touch: the status line says what it did.
+  if (download instanceof HTMLAnchorElement) {
+    listen(download, 'click', () => {
+      status.textContent = `Saving ${filename}…`;
+    });
+  }
 
   // Scrolling by hand stops the following; the page's own smooth scroll does not.
   let ownScrollUntil = 0;
@@ -201,7 +249,7 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     }
     if (first || state.playing !== last.playing) {
       root.classList.toggle('zs-playing', state.playing);
-      icon.setAttribute('d', state.playing ? ICON_PAUSE : ICON_PLAY);
+      glyph.setAttribute('d', state.playing ? ICON_PAUSE : ICON_PLAY);
       play.setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
     }
     if (first || state.following !== last.following || state.playing !== last.playing) {
@@ -212,9 +260,10 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
       range.max = String(state.duration);
       total.textContent = formatTime(state.duration);
     }
-    if (first || state.ready !== last.ready) play.disabled = !state.ready;
-    if (first || state.status !== last.status || state.failed !== last.failed) {
-      status.textContent = state.status;
+    if (first || state.ready !== last.ready) play.setAttribute('aria-busy', String(!state.ready && state.playing));
+    if (first || state.status !== last.status || state.failed !== last.failed || state.playing !== last.playing || state.time !== last.time) {
+      const atStart = !state.playing && state.time === 0 && !state.status;
+      status.textContent = atStart ? PAUSED_HINT : state.status;
       status.classList.toggle('zs-err', state.failed);
     }
     if (first || state.speedIndex !== last.speedIndex) speed.textContent = `${config.speeds[state.speedIndex]}×`;
