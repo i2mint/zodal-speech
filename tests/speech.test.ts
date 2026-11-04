@@ -224,6 +224,54 @@ describe('the DOM renderer', () => {
     expect(back.hidden).toBe(true);
   });
 
+  it('puts the transport at the top by default, ahead of the transcript', () => {
+    // A host can push the bottom of a widget out of sight (a frame taller than the screen);
+    // the top is on screen as soon as the widget is (annals, 2026-11-04).
+    mountSpeechPlayer(host, { title: 'T', audio: { src: 'a.mp3' }, cues: CUES, filename: 'o.mp3' }, { download: true });
+    const root = host.querySelector('.zs-player')!;
+    expect(root.firstElementChild!.classList.contains('zs-bar-top')).toBe(true);
+    const controls = [...root.querySelectorAll('.zs-controls > *')].map((n) => n.getAttribute('aria-label') ?? n.className);
+    expect(controls).toEqual(['Play', 'Back 10 seconds', 'Ahead 10 seconds', 'Playback speed', 'zs-gap', 'Download audio']);
+    expect(root.querySelector('.zs-bar')!.compareDocumentPosition(root.querySelector('.zs-text')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps the bottom bar when asked for it', () => {
+    mount({ bar: 'sticky' });
+    const root = host.querySelector('.zs-player')!;
+    expect(root.querySelector('.zs-bar-sticky')).not.toBeNull();
+    expect(root.classList.contains('zs-at-bottom')).toBe(true);
+    expect(root.firstElementChild!.classList.contains('zs-text')).toBe(true);
+  });
+
+  it('never disables play: on iOS the first tap is what loads the audio', () => {
+    mount();
+    const play = host.querySelector('.zs-play') as HTMLButtonElement;
+    expect(play.disabled).toBe(false);
+    play.click();
+    expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled();
+  });
+
+  it('offers the download as an icon button that says what a tap did', () => {
+    mountSpeechPlayer(host, { title: 'T', audio: { src: 'a.mp3' }, cues: CUES, filename: 'o.mp3' }, { download: true });
+    const link = host.querySelector('.zs-bar a.zs-download') as HTMLAnchorElement;
+    expect(link.getAttribute('download')).toBe('o.mp3');
+    expect(link.getAttribute('aria-label')).toBe('Download audio');
+    expect(link.querySelector('svg')).not.toBeNull();
+    link.addEventListener('click', (e) => e.preventDefault());
+    link.click();
+    expect(host.querySelector('.zs-status')!.textContent).toBe('Saving o.mp3…');
+    host.innerHTML = '';
+    mount();
+    expect(host.querySelector('a.zs-download')).toBeNull();
+  });
+
+  it('says a sentence can be tapped while it waits at the start', () => {
+    const { audio } = mount();
+    Object.defineProperty(audio, 'duration', { value: 6, configurable: true });
+    audio.dispatchEvent(new Event('loadedmetadata'));
+    expect(host.querySelector('.zs-status')!.textContent).toBe('Tap any sentence to play from there.');
+  });
+
   it('leaves no listener or element behind', () => {
     const { destroy, player } = mount();
     destroy();
