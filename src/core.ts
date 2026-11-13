@@ -6,7 +6,7 @@
  */
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { immer } from 'zustand/middleware/immer';
-import { seekThenPlay } from './playback.js';
+import { cueAt, cuesDuration, seekThenPlay, wordAt } from '@zodal/media';
 
 /** The structural shape of a cue, so this module needs no schema at runtime. */
 export interface CueLike {
@@ -55,52 +55,8 @@ export interface SpeechPlayerConfig {
   skipAheadS: number;
 }
 
-/** Tolerance so a seek to a cue's own start lands in that cue, not the one before it. */
-const CUE_EPSILON_S = 0.01;
-const SECONDS_PER_MINUTE = 60;
-const MINUTES_PER_HOUR = 60;
-
-/** `m:ss`, or `h:mm:ss` past the hour. */
-export function formatTime(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds || 0));
-  const hours = Math.floor(whole / (SECONDS_PER_MINUTE * MINUTES_PER_HOUR));
-  const minutes = Math.floor(whole / SECONDS_PER_MINUTE) % MINUTES_PER_HOUR;
-  const secs = whole % SECONDS_PER_MINUTE;
-  const mm = hours && minutes < 10 ? `0${minutes}` : `${minutes}`;
-  return `${hours ? `${hours}:` : ''}${mm}:${secs < 10 ? '0' : ''}${secs}`;
-}
-
-/** The index of the cue being spoken at `time`: the last one that has started, or -1. */
-export function cueAt(cues: readonly CueLike[], time: number): number {
-  let lo = 0;
-  let hi = cues.length - 1;
-  let at = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if (cues[mid].start <= time + CUE_EPSILON_S) {
-      at = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-  return at;
-}
-
-/** The index of the word being spoken within `cue`, or -1 when it has no word times. */
-export function wordAt(cue: CueLike | undefined, time: number): number {
-  if (!cue || !cue.words.length) return -1;
-  let at = 0;
-  cue.words.forEach((word, i) => {
-    if (word[0] <= time) at = i;
-  });
-  return at;
-}
-
-/** The cues' total length: the last cue's end, which stands in until the audio reports its own. */
-export function cuesDuration(cues: readonly CueLike[]): number {
-  return cues.length ? cues[cues.length - 1].end : 0;
-}
+// The lookup by time is @zodal/media's, shared with the lyrics and subtitle views.
+export { cueAt, wordAt, cuesDuration, formatTime, CUE_EPSILON_S } from '@zodal/media/cues';
 
 /** Command ids and labels, declared once, for a palette, an MCP surface or a test to reuse. */
 export const SPEECH_COMMANDS = {

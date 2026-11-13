@@ -205,6 +205,19 @@ describe('the DOM renderer', () => {
     expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled();
   });
 
+  it('follows by scrolling its scroller only, never the page around a frame', () => {
+    // scrollIntoView also scrolled the annals page around the overview's frame (2026-11-13)
+    const box = document.createElement('div');
+    document.body.appendChild(box);
+    box.scrollTo = vi.fn();
+    const into = vi.spyOn(window.HTMLElement.prototype, 'scrollIntoView' as never).mockImplementation((() => undefined) as never);
+    mountSpeechPlayer(host, { title: 'T', audio: { src: 'a' }, cues: CUES }, { scroller: box });
+    (host.querySelectorAll('.zs-s')[2] as HTMLElement).click();
+    expect(box.scrollTo).toHaveBeenCalled();
+    expect(into).not.toHaveBeenCalled();
+    into.mockRestore();
+  });
+
   it('stops following on a hand scroll and offers the way back', async () => {
     const { audio, player } = mount();
     Object.defineProperty(audio, 'paused', { value: false, configurable: true });
