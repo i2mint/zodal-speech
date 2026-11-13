@@ -4,7 +4,7 @@
  * It draws the transcript and the transport inside `host` and returns a handle whose
  * `destroy()` removes every listener it added. Import `@zodal/speech/styles.css` beside it.
  */
-import { createSpeechPlayer, cuesDuration, formatTime, type CueLike, type SpeechPlayer } from './core.js';
+import { createSpeechPlayer, cueAt, cuesDuration, formatTime, type CueLike, type SpeechPlayer } from './core.js';
 import { attachFollow, createFollow, scrollerOf } from '@zodal/media/follow';
 
 /** The track as this renderer reads it. Validate with `parseSpeechTrack` where data is untrusted. */
@@ -14,8 +14,17 @@ export interface MountTrack {
   audio: { src: string } | { base64: string };
   mime?: string;
   filename?: string;
+  /** The transcript; empty for audio without one (the transport alone is drawn). */
   cues: ReadonlyArray<Partial<CueLike> & Pick<CueLike, 'start' | 'end' | 'text'>>;
+  /** Chapters, in time order: a list that plays from a chapter's start and marks the current one. */
+  chapters?: ReadonlyArray<MountChapter>;
   sources?: ReadonlyArray<string | { title: string; url?: string }>;
+}
+
+/** A chapter: where it starts, in seconds, and its title. */
+export interface MountChapter {
+  start: number;
+  title: string;
 }
 
 export interface MountOptions {
@@ -37,6 +46,12 @@ export interface MountOptions {
    * page. Only it moves, never a page or frame around it.
    */
   scroller?: HTMLElement;
+  /**
+   * The audio element to play through, when the host made it already (it may be tracking it, or
+   * have moved it to where a listener stopped). It is moved into the player and its native
+   * controls are removed; its `src` is kept when it already is the track's. Default: a new one.
+   */
+  audio?: HTMLAudioElement;
 }
 
 export interface MountedSpeechPlayer {
@@ -59,6 +74,7 @@ const ICON_DOWNLOAD = 'M12 3v11m0 0-4.5-4.5M12 14l4.5-4.5M4 17v3h16v-3';
 const ICON_BACK = 'M12 4a8 8 0 1 1-7.6 5.5M4.4 3.5v6h6';
 const ICON_AHEAD = 'M12 4a8 8 0 1 0 7.6 5.5M19.6 3.5v6h-6';
 const PAUSED_HINT = 'Tap any sentence to play from there.';
+const PAUSED_HINT_CHAPTERS = 'Tap a chapter to play from there.';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -148,6 +164,17 @@ function drawTranscript(cues: readonly CueLike[]) {
   return { text, sentences, words };
 }
 
+/** The chapter list: one button per chapter, its start time and its title. */
+function drawChapters(chapters: readonly MountChapter[]) {
+  const buttons = chapters.map((chapter, i) =>
+    el('button', { class: 'zs-ch', type: 'button', 'data-chapter': String(i) }, el('span', { class: 'zs-ch-at' }, formatTime(chapter.start)), ' ', el('span', { class: 'zs-ch-title' }, chapter.title)),
+  );
+  const list = el('details', { class: 'zs-chapters', open: '' }, el('summary', {}, 'Chapters'), el('ol', {}, ...buttons.map((b) => el('li', {}, b))));
+  // As cues, so the current one is looked up like a sentence: each ends where the next starts.
+  const spans: CueLike[] = chapters.map((c, i) => ({ start: c.start, end: chapters[i + 1]?.start ?? Number.POSITIVE_INFINITY, text: c.title, speaker: '', segment: i, words: [] }));
+  return { list, buttons, spans };
+}
+
 /** Mounts a player for `track` inside `host`. */
 export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options: MountOptions = {}): MountedSpeechPlayer {
   const cues = track.cues.map(normalise);
@@ -156,12 +183,15 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     skipBackS: options.skipBackS ?? DEFAULT_SKIP_BACK_S,
     skipAheadS: options.skipAheadS ?? DEFAULT_SKIP_AHEAD_S,
   };
-  const audio = el('audio', { preload: 'auto' });
+  const audio = options.audio ?? el('audio', { preload: 'auto' });
+  audio.removeAttribute('controls');
   const player = createSpeechPlayer(cues, audio, config);
   const { commands, store, events } = player;
   const { url, revoke } = audioUrl(track);
 
   const { text, sentences, words } = drawTranscript(cues);
+  const chapters = drawChapters([...(track.chapters ?? [])].sort((a, b) => a.start - b.start));
+  const hint = cues.length ? PAUSED_HINT : chapters.buttons.length ? PAUSED_HINT_CHAPTERS : '';
   const range = el('input', { class: 'zs-seek', type: 'range', min: '0', max: '0', step: '0.1', value: '0', 'aria-label': 'Position' });
   const ghost = el('div', { class: 'zs-ghost' });
   const now = el('span', { class: 'zs-now' }, '0:00');
@@ -193,8 +223,10 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     ),
   );
   const root = el('div', { class: `zs-player zs-at-${where === 'top' ? 'top' : 'bottom'}` });
-  if (where === 'top') root.append(bar, followButton, text, audio);
-  else root.append(text, followButton, bar, audio);
+  // Without a transcript there is nothing to read or follow: the transport (and chapters) alone.
+  const reading: HTMLElement[] = [...(chapters.buttons.length ? [chapters.list] : []), ...(cues.length ? [text] : [])];
+  if (where === 'top') root.append(bar, followButton, ...reading, audio);
+  else root.append(...reading, followButton, bar, audio);
   if (track.sources?.length) root.append(drawSources(track.sources));
   host.append(root);
 
@@ -226,11 +258,12 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
   // The nearest scrolling ancestor at mount (hailing's app scrolls a `main` box), else the page.
   const scroller = options.scroller ?? scrollerOf(host);
   const follow = createFollow({ following: store.getState().following });
-  const followView = attachFollow(scroller, follow, { anchor: 0.5, ownScrollMs: OWN_SCROLL_MS, scrollKeys: SCROLL_KEYS });
+  // With no transcript there is nothing to follow, so no hand scroll is listened for.
+  const followView = cues.length ? attachFollow(scroller, follow, { anchor: 0.5, ownScrollMs: OWN_SCROLL_MS, scrollKeys: SCROLL_KEYS }) : null;
   const unfollow = follow.subscribe(({ following }) => {
     if (store.getState().following !== following) commands.follow(following);
   });
-  const bring = (node: HTMLElement) => followView.bring(node, true);
+  const bring = (node: HTMLElement) => followView?.bring(node, true);
 
   // Draw: one subscriber, and each part changes only when its own value did.
   let frame = 0;
@@ -239,6 +272,7 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     if (!audio.paused) frame = requestAnimationFrame(loop);
   };
   let shown = store.getState();
+  let chapterShown = -1;
   const paint = (state = store.getState(), last = shown, first = false) => {
     if (first || state.cue !== last.cue) {
       sentences[last.cue]?.classList.remove('zs-on');
@@ -255,7 +289,7 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
       play.setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
     }
     if (first || state.following !== last.following || state.playing !== last.playing) {
-      followButton.hidden = state.following || !state.playing;
+      followButton.hidden = !followView || state.following || !state.playing;
       if (state.following && !last.following) {
         follow.resume();
         if (sentences[state.cue]) bring(sentences[state.cue]);
@@ -268,7 +302,7 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     if (first || state.ready !== last.ready) play.setAttribute('aria-busy', String(!state.ready && state.playing));
     if (first || state.status !== last.status || state.failed !== last.failed || state.playing !== last.playing || state.time !== last.time) {
       const atStart = !state.playing && state.time === 0 && !state.status;
-      status.textContent = atStart ? PAUSED_HINT : state.status;
+      status.textContent = atStart ? hint : state.status;
       status.classList.toggle('zs-err', state.failed);
     }
     if (first || state.speedIndex !== last.speedIndex) speed.textContent = `${config.speeds[state.speedIndex]}×`;
@@ -279,6 +313,14 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
       }
     }
     const shownTime = state.scrubbing ?? state.time;
+    if (chapters.buttons.length) {
+      const chapter = cueAt(chapters.spans, state.time);
+      if (first || chapter !== chapterShown) {
+        chapters.buttons[chapterShown]?.removeAttribute('aria-current');
+        chapters.buttons[chapter]?.setAttribute('aria-current', 'true');
+        chapterShown = chapter;
+      }
+    }
     if (state.scrubbing === null) range.value = String(state.time);
     now.textContent = formatTime(shownTime);
     shown = state;
@@ -300,6 +342,10 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
   });
   listen(audio, 'seeked', player.tick);
   listen(audio, 'ended', events.paused);
+  // A length learnt late (a stream, an estimate at loadedmetadata) still reaches the seek bar.
+  listen(audio, 'durationchange', () => {
+    if (Number.isFinite(audio.duration) && audio.duration > 0 && audio.duration !== store.getState().duration) events.loaded();
+  });
 
   // The person tells the commands what to do.
   listen<MouseEvent>(text, 'click', (event) => {
@@ -312,6 +358,13 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     event.preventDefault();
     event.stopPropagation();
     commands.playCue(Number(sentence.dataset.cue));
+  });
+  listen<MouseEvent>(chapters.list, 'click', (event) => {
+    const button = (event.target as Element).closest?.('.zs-ch') as HTMLElement | null;
+    const chapter = button ? chapters.spans[Number(button.dataset.chapter)] : undefined;
+    if (!chapter) return;
+    commands.follow(true);
+    commands.seek(chapter.start, { play: true });
   });
   listen(followButton, 'click', () => commands.follow(true));
   listen(play, 'click', commands.toggle);
@@ -353,7 +406,20 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     }
   }
 
-  audio.src = url;
+  // A host's element may already hold this source, and a place it was moved to: keep both.
+  if (audio.getAttribute('src') !== url) audio.src = url;
+  else {
+    // What happened to the host's element before the player came: a load, a failure, a seek
+    // (to where the listener stopped), a play.
+    // Only a moved or playing element is read: a first tick at 0 would scroll the page to
+    // the first line as soon as it opens.
+    if (audio.error) events.failed();
+    else if (audio.readyState >= 1) events.loaded();
+    if (!audio.paused) {
+      events.played();
+      loop();
+    } else if (audio.currentTime > 0) player.tick();
+  }
 
   return {
     player,
@@ -363,7 +429,7 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
       audio.pause();
       undo.forEach((fn) => fn());
       unfollow();
-      followView.detach();
+      followView?.detach();
       root.remove();
     },
   };

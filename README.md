@@ -50,6 +50,8 @@ const columns = toColumnDefs(speechTrackCollection);
 
 `SpeechPlayerOptionsSchema` declares them: `speeds`, `skipBackS`, `skipAheadS`, `bar` (`top`, the default, pins the transport to the top of the player: a host such as a frame taller than the screen can push a widget's bottom out of sight, never its top; `sticky` keeps it at the bottom of its host, `fixed` at the bottom of the window) and `hotkeys` (Space and the arrow keys, off by default, because an embedded widget does not own the keyboard). `mountSpeechPlayer` also takes `download` to offer the audio as a file, as an icon button in the transport (its tap is announced in the status line, since touch has no tooltip). Skips default to 10 seconds each way, and Play is never disabled: on iOS the first tap is what loads the audio.
 
+Audio without a transcript works too: pass `cues: []` and the transport is drawn alone. A track's `chapters` (`[{ start, title }]`) become a list that plays from a tapped chapter and marks the current one. `mountSpeechPlayer(host, track, { audio })` plays through an `<audio>` element the host already made (one it tracks, or has moved to where a listener stopped); its source and position are kept. A host with its own sticky header sets `--zs-bar-top` to that header's height, so the pinned transport sits below it. The one-file bundle also exposes `ZodalSpeech.parseWebVtt` (from `@zodal/media`), to turn a `.vtt` transcript or chapters file into cues.
+
 ## Another renderer
 
 `createSpeechPlayer(cues, audio, config)` holds all the behaviour in a zustand store. A React renderer subscribes to `player.store` and calls `player.commands`, and adds nothing else. `AudioPort` is the part of an audio element the player uses, so a test can pass a plain object.

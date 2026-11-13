@@ -59,6 +59,12 @@ describe('the model', () => {
     expect(() => parseSpeechTrack({ ...base, sources: [{ title: 'y', url: '//evil.test' }] })).toThrow();
   });
 
+  it('keeps chapters', () => {
+    const t = parseSpeechTrack({ title: 'T', audio: { src: 'a' }, cues: [], chapters: [{ start: 5, title: 'Two' }] });
+    expect(t.chapters).toEqual([{ start: 5, title: 'Two' }]);
+    expect(parseSpeechTrack({ title: 'T', audio: { src: 'a' }, cues: [] }).chapters).toEqual([]);
+  });
+
   it('refuses a track with no audio, saying so', () => {
     expect(() => parseSpeechTrack({ title: 'T', audio: {}, cues: [] })).toThrow(/Not a speech track/);
   });
@@ -293,6 +299,80 @@ describe('the DOM renderer', () => {
     expect(player.store.getState().following).toBe(true);
   });
 
+  it('plays audio without a transcript: the transport alone, and no hint about sentences', () => {
+    const { audio } = mountSpeechPlayer(host, { title: 'T', audio: { src: 'a.mp3' }, cues: [] });
+    audio.dispatchEvent(new Event('loadedmetadata'));
+    expect(host.querySelector('.zs-text')).toBeNull();
+    expect(host.querySelector('.zs-play')).not.toBeNull();
+    expect(host.querySelector('.zs-seek')).not.toBeNull();
+    expect(host.querySelector('.zs-status')!.textContent).toBe('');
+  });
+
+  it("plays through the host's own audio element, keeping its source and where it was moved to", () => {
+    const own = document.createElement('audio');
+    own.setAttribute('controls', '');
+    own.src = 'a.mp3';
+    const src = own.getAttribute('src');
+    Object.defineProperty(own, 'readyState', { value: 1, configurable: true });
+    Object.defineProperty(own, 'duration', { value: 120, configurable: true });
+    host.append(own);
+    const { audio, player } = mountSpeechPlayer(host, { title: 'T', audio: { src: 'a.mp3' }, cues: [] }, { audio: own });
+    expect(audio).toBe(own);
+    expect(own.hasAttribute('controls')).toBe(false);
+    expect(own.getAttribute('src')).toBe(src);
+    expect(own.closest('.zs-player')).not.toBeNull();
+    // its metadata had loaded before the player came: the player knows the length anyway
+    expect(player.store.getState().duration).toBe(120);
+  });
+
+  it("takes over what the host's element did before it came: a seek, a play, a failure", () => {
+    const own = document.createElement('audio');
+    own.src = 'a.mp3';
+    Object.defineProperty(own, 'readyState', { value: 1, configurable: true });
+    Object.defineProperty(own, 'duration', { value: 120, configurable: true });
+    Object.defineProperty(own, 'currentTime', { value: 75, configurable: true, writable: true });
+    Object.defineProperty(own, 'paused', { value: false, configurable: true });
+    const { player } = mountSpeechPlayer(host, { title: 'T', audio: { src: 'a.mp3' }, cues: [] }, { audio: own });
+    expect(player.store.getState().time).toBe(75);
+    expect(player.store.getState().playing).toBe(true);
+    host.innerHTML = '';
+    const broken = document.createElement('audio');
+    broken.src = 'gone.mp3';
+    Object.defineProperty(broken, 'error', { value: { code: 4 }, configurable: true });
+    mountSpeechPlayer(host, { title: 'T', audio: { src: 'gone.mp3' }, cues: [] }, { audio: broken });
+    expect(host.querySelector('.zs-status')!.textContent).toBe('This audio could not be played here.');
+  });
+
+  it('offers no way back to a transcript it does not have', () => {
+    const { audio, player } = mountSpeechPlayer(host, { title: 'T', audio: { src: 'a.mp3' }, cues: [] });
+    audio.dispatchEvent(new Event('play'));
+    window.dispatchEvent(new Event('wheel'));
+    expect(player.store.getState().following).toBe(true);
+    expect((host.querySelector('.zs-follow') as HTMLElement).hidden).toBe(true);
+  });
+
+  it('lists chapters, marks the current one and plays from a tapped one', () => {
+    const chapters = [{ start: 300, title: 'Later' }, { start: 0, title: 'Opening' }];
+    const { audio, player } = mountSpeechPlayer(host, { title: 'T', audio: { src: 'a.mp3' }, cues: [], chapters });
+    let at = 0;
+    Object.defineProperty(audio, 'currentTime', { get: () => at, set: (v: number) => { at = v; }, configurable: true });
+    const buttons = [...host.querySelectorAll('.zs-ch')] as HTMLButtonElement[];
+    expect(buttons.map((b) => b.textContent)).toEqual(['0:00 Opening', '5:00 Later']);
+    expect(buttons[0].getAttribute('aria-current')).toBe('true');
+    // tapped before the audio's length is known, it still goes there (not clamped to 0)
+    buttons[1].click();
+    expect(at).toBe(300);
+    player.tick();
+    expect(buttons[1].getAttribute('aria-current')).toBe('true');
+    expect(buttons[0].hasAttribute('aria-current')).toBe(false);
+    expect(window.HTMLMediaElement.prototype.play).toHaveBeenCalled();
+    at = 0;
+    Object.defineProperty(audio, 'duration', { value: 600, configurable: true });
+    audio.dispatchEvent(new Event('loadedmetadata'));
+    player.tick();
+    expect(host.querySelector('.zs-status')!.textContent).toBe('Tap a chapter to play from there.');
+  });
+
   it('leaves the keyboard alone unless asked', () => {
     const { player } = mount();
     const spy = vi.spyOn(player.commands, 'toggle');
@@ -315,6 +395,8 @@ describe('the one-file bundle', () => {
     const page = vm.createContext({});
     vm.runInContext(`${readFileSync(bundle, 'utf8')};globalThis.got = typeof ZodalSpeech.mount;`, page);
     expect((page as { got?: string }).got).toBe('function');
+    vm.runInContext(`globalThis.vtt = ZodalSpeech.parseWebVtt('WEBVTT\\n\\n00:01.000 --> 00:02.000\\nHi').map((c) => c.text);`, page);
+    expect((page as { vtt?: string[] }).vtt).toEqual(['Hi']);
   });
 });
 

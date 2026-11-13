@@ -49,6 +49,8 @@ export const SpeechTrackSchema = z.object({
   mime: z.string().default('audio/mpeg'),
   filename: z.string().default('speech.mp3'),
   cues: z.array(SpeechCueSchema),
+  /** Chapters: where each starts, in seconds, and its title. */
+  chapters: z.array(z.object({ start: z.number().min(0), title: z.string().min(1) })).default([]),
   sources: z.array(SpeechSourceSchema).default([]),
 });
 

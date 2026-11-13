@@ -20,7 +20,7 @@ importers:
         version: 0.2.0(zod@4.6.7)
       '@zodal/media':
         specifier: github:i2mint/zodal-media
-        version: https://codeload.github.com/i2mint/zodal-media/tar.gz/d2bc109dea4f99c07dc93f6d86dbe0766cfdd311(acture@1.3.1(zod@4.6.7))(zod@4.6.7)(zustand@5.0.16(immer@10.2.0))
+        version: https://codeload.github.com/i2mint/zodal-media/tar.gz/c98495d6476af791e2a60650b6e38ac85ea74a01(acture@1.3.1(zod@4.6.7))(zod@4.6.7)(zustand@5.0.16(immer@10.2.0))
       '@zodal/ui':
         specifier: ^0.2.0
         version: 0.2.0(zod@4.6.7)
@@ -580,8 +580,8 @@ packages:
     peerDependencies:
       zod: ^3.24.0 || ^4.0.0
 
-  '@zodal/media@https://codeload.github.com/i2mint/zodal-media/tar.gz/d2bc109dea4f99c07dc93f6d86dbe0766cfdd311':
-    resolution: {tarball: https://codeload.github.com/i2mint/zodal-media/tar.gz/d2bc109dea4f99c07dc93f6d86dbe0766cfdd311}
+  '@zodal/media@https://codeload.github.com/i2mint/zodal-media/tar.gz/c98495d6476af791e2a60650b6e38ac85ea74a01':
+    resolution: {tarball: https://codeload.github.com/i2mint/zodal-media/tar.gz/c98495d6476af791e2a60650b6e38ac85ea74a01}
     version: 0.1.0
     peerDependencies:
       acture: '>=1.3.0 <2.0.0'
@@ -1452,7 +1452,7 @@ snapshots:
     dependencies:
       zod: 4.6.7
 
-  '@zodal/media@https://codeload.github.com/i2mint/zodal-media/tar.gz/d2bc109dea4f99c07dc93f6d86dbe0766cfdd311(acture@1.3.1(zod@4.6.7))(zod@4.6.7)(zustand@5.0.16(immer@10.2.0))':
+  '@zodal/media@https://codeload.github.com/i2mint/zodal-media/tar.gz/c98495d6476af791e2a60650b6e38ac85ea74a01(acture@1.3.1(zod@4.6.7))(zod@4.6.7)(zustand@5.0.16(immer@10.2.0))':
     optionalDependencies:
       acture: 1.3.1(zod@4.6.7)
       zod: 4.6.7
