@@ -59,6 +59,12 @@ describe('the model', () => {
     expect(() => parseSpeechTrack({ ...base, sources: [{ title: 'y', url: '//evil.test' }] })).toThrow();
   });
 
+  it('keeps chapters', () => {
+    const t = parseSpeechTrack({ title: 'T', audio: { src: 'a' }, cues: [], chapters: [{ start: 5, title: 'Two' }] });
+    expect(t.chapters).toEqual([{ start: 5, title: 'Two' }]);
+    expect(parseSpeechTrack({ title: 'T', audio: { src: 'a' }, cues: [] }).chapters).toEqual([]);
+  });
+
   it('refuses a track with no audio, saying so', () => {
     expect(() => parseSpeechTrack({ title: 'T', audio: {}, cues: [] })).toThrow(/Not a speech track/);
   });
@@ -317,6 +323,32 @@ describe('the DOM renderer', () => {
     expect(own.closest('.zs-player')).not.toBeNull();
     // its metadata had loaded before the player came: the player knows the length anyway
     expect(player.store.getState().duration).toBe(120);
+  });
+
+  it("takes over what the host's element did before it came: a seek, a play, a failure", () => {
+    const own = document.createElement('audio');
+    own.src = 'a.mp3';
+    Object.defineProperty(own, 'readyState', { value: 1, configurable: true });
+    Object.defineProperty(own, 'duration', { value: 120, configurable: true });
+    Object.defineProperty(own, 'currentTime', { value: 75, configurable: true, writable: true });
+    Object.defineProperty(own, 'paused', { value: false, configurable: true });
+    const { player } = mountSpeechPlayer(host, { title: 'T', audio: { src: 'a.mp3' }, cues: [] }, { audio: own });
+    expect(player.store.getState().time).toBe(75);
+    expect(player.store.getState().playing).toBe(true);
+    host.innerHTML = '';
+    const broken = document.createElement('audio');
+    broken.src = 'gone.mp3';
+    Object.defineProperty(broken, 'error', { value: { code: 4 }, configurable: true });
+    mountSpeechPlayer(host, { title: 'T', audio: { src: 'gone.mp3' }, cues: [] }, { audio: broken });
+    expect(host.querySelector('.zs-status')!.textContent).toBe('This audio could not be played here.');
+  });
+
+  it('offers no way back to a transcript it does not have', () => {
+    const { audio, player } = mountSpeechPlayer(host, { title: 'T', audio: { src: 'a.mp3' }, cues: [] });
+    audio.dispatchEvent(new Event('play'));
+    window.dispatchEvent(new Event('wheel'));
+    expect(player.store.getState().following).toBe(true);
+    expect((host.querySelector('.zs-follow') as HTMLElement).hidden).toBe(true);
   });
 
   it('lists chapters, marks the current one and plays from a tapped one', () => {

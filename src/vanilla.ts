@@ -258,11 +258,12 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
   // The nearest scrolling ancestor at mount (hailing's app scrolls a `main` box), else the page.
   const scroller = options.scroller ?? scrollerOf(host);
   const follow = createFollow({ following: store.getState().following });
-  const followView = attachFollow(scroller, follow, { anchor: 0.5, ownScrollMs: OWN_SCROLL_MS, scrollKeys: SCROLL_KEYS });
+  // With no transcript there is nothing to follow, so no hand scroll is listened for.
+  const followView = cues.length ? attachFollow(scroller, follow, { anchor: 0.5, ownScrollMs: OWN_SCROLL_MS, scrollKeys: SCROLL_KEYS }) : null;
   const unfollow = follow.subscribe(({ following }) => {
     if (store.getState().following !== following) commands.follow(following);
   });
-  const bring = (node: HTMLElement) => followView.bring(node, true);
+  const bring = (node: HTMLElement) => followView?.bring(node, true);
 
   // Draw: one subscriber, and each part changes only when its own value did.
   let frame = 0;
@@ -288,7 +289,7 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
       play.setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
     }
     if (first || state.following !== last.following || state.playing !== last.playing) {
-      followButton.hidden = state.following || !state.playing;
+      followButton.hidden = !followView || state.following || !state.playing;
       if (state.following && !last.following) {
         follow.resume();
         if (sentences[state.cue]) bring(sentences[state.cue]);
@@ -341,6 +342,10 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
   });
   listen(audio, 'seeked', player.tick);
   listen(audio, 'ended', events.paused);
+  // A length learnt late (a stream, an estimate at loadedmetadata) still reaches the seek bar.
+  listen(audio, 'durationchange', () => {
+    if (Number.isFinite(audio.duration) && audio.duration > 0 && audio.duration !== store.getState().duration) events.loaded();
+  });
 
   // The person tells the commands what to do.
   listen<MouseEvent>(text, 'click', (event) => {
@@ -357,7 +362,9 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
   listen<MouseEvent>(chapters.list, 'click', (event) => {
     const button = (event.target as Element).closest?.('.zs-ch') as HTMLElement | null;
     const chapter = button ? chapters.spans[Number(button.dataset.chapter)] : undefined;
-    if (chapter) commands.seek(chapter.start, { play: true });
+    if (!chapter) return;
+    commands.follow(true);
+    commands.seek(chapter.start, { play: true });
   });
   listen(followButton, 'click', () => commands.follow(true));
   listen(play, 'click', commands.toggle);
@@ -401,7 +408,17 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
 
   // A host's element may already hold this source, and a place it was moved to: keep both.
   if (audio.getAttribute('src') !== url) audio.src = url;
-  else if (audio.readyState >= 1) events.loaded();
+  else {
+    // What happened to the host's element before the player came: a load, a failure, a seek
+    // (to where the listener stopped), a play.
+    if (audio.error) events.failed();
+    else if (audio.readyState >= 1) events.loaded();
+    player.tick();
+    if (!audio.paused) {
+      events.played();
+      loop();
+    }
+  }
 
   return {
     player,
@@ -411,7 +428,7 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
       audio.pause();
       undo.forEach((fn) => fn());
       unfollow();
-      followView.detach();
+      followView?.detach();
       root.remove();
     },
   };
