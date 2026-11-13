@@ -5,6 +5,7 @@
  * `destroy()` removes every listener it added. Import `@zodal/speech/styles.css` beside it.
  */
 import { createSpeechPlayer, cuesDuration, formatTime, type CueLike, type SpeechPlayer } from './core.js';
+import { attachFollow, createFollow } from '@zodal/media/follow';
 
 /** The track as this renderer reads it. Validate with `parseSpeechTrack` where data is untrusted. */
 export interface MountTrack {
@@ -31,6 +32,11 @@ export interface MountOptions {
   hotkeys?: boolean;
   /** Offers the audio as a download. */
   download?: boolean;
+  /**
+   * What scrolls the transcript into view: the page (the default) or a box of its own. Only it
+   * moves, never a page or frame around it.
+   */
+  scroller?: HTMLElement;
 }
 
 export interface MountedSpeechPlayer {
@@ -214,21 +220,16 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     });
   }
 
-  // Scrolling by hand stops the following; the page's own smooth scroll does not.
-  let ownScrollUntil = 0;
-  const bring = (node: HTMLElement) => {
-    ownScrollUntil = Date.now() + OWN_SCROLL_MS;
-    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    node.scrollIntoView?.({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
-  };
-  const byHand = () => {
-    if (Date.now() > ownScrollUntil) commands.follow(false);
-  };
-  listen(window, 'wheel', byHand, { passive: true });
-  listen(window, 'touchmove', byHand, { passive: true });
-  listen<KeyboardEvent>(window, 'keydown', (event) => {
-    if (SCROLL_KEYS.includes(event.key)) commands.follow(false);
+  // Scrolling by hand stops the following; the page's own smooth scroll does not. Only the
+  // scroller moves: scrollIntoView also scrolled the page around a frame (annals, 2026-11-13).
+  const doc = host.ownerDocument;
+  const scroller = options.scroller ?? ((doc.scrollingElement ?? doc.documentElement) as HTMLElement);
+  const follow = createFollow({ following: store.getState().following });
+  const followView = attachFollow(scroller, follow, { anchor: 0.5, ownScrollMs: OWN_SCROLL_MS, scrollKeys: SCROLL_KEYS });
+  const unfollow = follow.subscribe(({ following }) => {
+    if (store.getState().following !== following) commands.follow(following);
   });
+  const bring = (node: HTMLElement) => followView.bring(node, true);
 
   // Draw: one subscriber, and each part changes only when its own value did.
   let frame = 0;
@@ -254,7 +255,10 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
     }
     if (first || state.following !== last.following || state.playing !== last.playing) {
       followButton.hidden = state.following || !state.playing;
-      if (state.following && !last.following && sentences[state.cue]) bring(sentences[state.cue]);
+      if (state.following && !last.following) {
+        follow.resume();
+        if (sentences[state.cue]) bring(sentences[state.cue]);
+      }
     }
     if (first || state.duration !== last.duration) {
       range.max = String(state.duration);
@@ -357,6 +361,8 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
       cancelAnimationFrame(frame);
       audio.pause();
       undo.forEach((fn) => fn());
+      unfollow();
+      followView.detach();
       root.remove();
     },
   };

@@ -7,6 +7,8 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
+    // Bundled until @zodal/media is on npm; then it becomes a dependency and this line goes.
+    noExternal: ['@zodal/media'],
     onSuccess: 'cp src/styles.css dist/styles.css',
   },
   {
