@@ -411,13 +411,14 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
   else {
     // What happened to the host's element before the player came: a load, a failure, a seek
     // (to where the listener stopped), a play.
+    // Only a moved or playing element is read: a first tick at 0 would scroll the page to
+    // the first line as soon as it opens.
     if (audio.error) events.failed();
     else if (audio.readyState >= 1) events.loaded();
-    player.tick();
     if (!audio.paused) {
       events.played();
       loop();
-    }
+    } else if (audio.currentTime > 0) player.tick();
   }
 
   return {
