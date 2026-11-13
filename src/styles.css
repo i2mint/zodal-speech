@@ -3,6 +3,7 @@
   --zs-ink: #1d1c1a; --zs-dim: #8a867d; --zs-rule: #e6e2d9; --zs-accent: #b5501e;
   --zs-mark: #f6e3c7; --zs-bar: rgba(251, 250, 247, 0.94); --zs-shadow: rgba(0, 0, 0, 0.08);
   --zs-paper: #fbfaf7; --zs-bar-offset: 7.5rem; /* replaced by the bar's measured height */
+  --zs-bar-top: 0px; /* a host's own sticky header above the pinned bar */
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -21,7 +22,7 @@
 .zs-who { display: block; font-size: 0.68em; letter-spacing: 0.06em; text-transform: uppercase; color: var(--zs-dim); }
 .zs-s { cursor: pointer; border-radius: 4px; transition: color 0.25s; }
 .zs-at-bottom .zs-s { scroll-margin-bottom: var(--zs-bar-offset); }
-.zs-at-top .zs-s { scroll-margin-top: calc(var(--zs-bar-offset) + 0.5rem); }
+.zs-at-top .zs-s { scroll-margin-top: calc(var(--zs-bar-top) + var(--zs-bar-offset) + 0.5rem); }
 .zs-playing .zs-s { color: var(--zs-dim); }
 .zs-playing .zs-s.zs-on { color: var(--zs-ink); }
 @media (hover: hover) {
@@ -34,7 +35,7 @@
 }
 /* at the top of the player, pinned there as the transcript scrolls (the default) */
 .zs-bar-top {
-  position: sticky; top: 0; margin: 0 -16px; padding: 0.45rem 16px 0.35rem;
+  position: sticky; top: var(--zs-bar-top); margin: 0 -16px; padding: 0.45rem 16px 0.35rem;
   border-bottom: 1px solid var(--zs-rule); box-shadow: 0 4px 16px var(--zs-shadow);
 }
 .zs-bar-sticky, .zs-bar-fixed {
@@ -82,6 +83,17 @@
   box-shadow: 0 4px 14px var(--zs-shadow);
 }
 .zs-at-bottom .zs-follow { bottom: calc(var(--zs-bar-offset) + env(safe-area-inset-bottom)); }
-.zs-at-top .zs-follow { position: sticky; display: block; margin: 0.4rem auto 0; transform: none; top: calc(var(--zs-bar-offset) + 0.4rem); left: auto; }
+.zs-at-top .zs-follow { position: sticky; display: block; margin: 0.4rem auto 0; transform: none; top: calc(var(--zs-bar-top) + var(--zs-bar-offset) + 0.4rem); left: auto; }
 @media (hover: hover) { .zs-download:hover, .zs-player .zs-skip:hover { background: var(--zs-rule); } }
 @media (prefers-reduced-motion: reduce) { .zs-s { transition: none; } }
+/* Chapters: one 44 px row each, the current one marked. */
+.zs-chapters { margin-top: 1.2em; }
+.zs-chapters summary { color: var(--zs-dim); font-size: 0.92em; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.zs-chapters ol { list-style: none; margin: 0; padding: 0; }
+.zs-player .zs-ch {
+  display: flex; gap: 0.75em; align-items: baseline; width: 100%; min-height: 44px; padding: 0.55rem 0.5rem;
+  text-align: left; background: none; color: inherit; font: inherit; border: 0; border-radius: 6px; cursor: pointer;
+}
+.zs-ch-at { flex: none; min-width: 3.2em; color: var(--zs-dim); font-variant-numeric: tabular-nums; }
+.zs-player .zs-ch[aria-current="true"] { background: var(--zs-mark); }
+@media (hover: hover) { .zs-player .zs-ch:hover { background: var(--zs-rule); } }

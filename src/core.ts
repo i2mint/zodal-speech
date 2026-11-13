@@ -154,7 +154,8 @@ export function createSpeechPlayer(cues: readonly CueLike[], audio: AudioPort, c
 
   const seek = (time: number, options: { play?: boolean } = {}) => {
     const { duration } = store.getState();
-    const to = Math.max(0, Math.min(duration, time));
+    // Before the length is known (audio with no transcript, metadata not loaded) only 0 bounds it.
+    const to = Math.max(0, duration > 0 ? Math.min(duration, time) : time);
     release();
     if (options.play && audio.paused) {
       const mine = new AbortController();
