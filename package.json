@@ -1,6 +1,6 @@
 {
   "name": "@zodal/speech",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A zodal model and player for speech audio with a synced transcript: tap a sentence to play from it, scroll freely, return to now.",
   "type": "module",
   "main": "./dist/index.cjs",

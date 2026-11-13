@@ -6,6 +6,7 @@
  */
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { immer } from 'zustand/middleware/immer';
+import { seekThenPlay } from './playback.js';
 
 /** The structural shape of a cue, so this module needs no schema at runtime. */
 export interface CueLike {
@@ -25,6 +26,11 @@ export interface AudioPort {
   playbackRate: number;
   play(): Promise<void> | void;
   pause(): void;
+  /** An HTMLMediaElement's; with them a tap after the end plays from the tap on Safari too (playback.ts). */
+  readonly ended?: boolean;
+  readonly seeking?: boolean;
+  addEventListener?(type: 'seeked', listener: () => void): void;
+  removeEventListener?(type: 'seeked', listener: () => void): void;
 }
 
 export interface SpeechPlayerState {
@@ -172,20 +178,39 @@ export function createSpeechPlayer(cues: readonly CueLike[], audio: AudioPort, c
       d.failed = failed;
     });
 
-  const toggle = () => {
-    if (!audio.paused) {
-      audio.pause();
-      return;
-    }
+  const start = () => {
     const started = audio.play();
     if (started && typeof started.catch === 'function') started.catch(() => say('Tap play to start.', true));
   };
 
+  // A play held until its seek lands (after the end, on Safari): a tap on Play meanwhile means pause.
+  let held: AbortController | null = null;
+  const release = () => {
+    held?.abort();
+    held = null;
+  };
+
+  const toggle = () => {
+    if (held) release();
+    else if (!audio.paused) audio.pause();
+    else start();
+  };
+
   const seek = (time: number, options: { play?: boolean } = {}) => {
     const { duration } = store.getState();
-    audio.currentTime = Math.max(0, Math.min(duration, time));
+    const to = Math.max(0, Math.min(duration, time));
+    release();
+    if (options.play && audio.paused) {
+      const mine = new AbortController();
+      held = mine;
+      seekThenPlay(audio, to, { play: start, signal: mine.signal }).then(
+        () => { if (held === mine) held = null; },
+        () => undefined, // cancelled: nothing to play
+      );
+    } else {
+      audio.currentTime = to;
+    }
     tick();
-    if (options.play && audio.paused) toggle();
   };
 
   const follow = (on = true) =>

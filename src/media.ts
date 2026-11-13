@@ -13,9 +13,10 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { z } from 'zod';
 import { defineCommand, ok, err, type AnyCommandRecord } from 'acture';
+import { seekLanded, type SeekablePort } from './playback.js';
 
 /** The part of an HTMLMediaElement the player uses. */
-export interface MediaPort {
+export interface MediaPort extends SeekablePort {
   currentTime: number;
   readonly duration: number;
   readonly paused: boolean;
@@ -93,6 +94,9 @@ export function createMediaPlayer(port: MediaPort, options: MediaPlayerOptions =
   const get = store.getState;
 
   const sync = () => set({ time: port.currentTime, duration: port.duration || 0, playing: !port.paused });
+  // A seek made after the end must land before play() on WebKit (see playback.ts).
+  let soughtAfterEnd = false;
+  let held: AbortController | null = null;
   const select = (index: number) => {
     const item = get().queue[index];
     if (!item) return;
@@ -105,13 +109,26 @@ export function createMediaPlayer(port: MediaPort, options: MediaPlayerOptions =
     store, port, sync,
     async play() {
       if (get().index < 0 && get().queue.length) select(0);
+      if (soughtAfterEnd) {
+        held?.abort();
+        const mine = (held = new AbortController());
+        try {
+          await seekLanded(port, { signal: mine.signal });
+        } catch {
+          return; // paused while the seek was landing
+        } finally {
+          if (held === mine) held = null;
+        }
+      }
+      soughtAfterEnd = false;
       await port.play();
       sync();
     },
-    pause() { port.pause(); sync(); },
+    pause() { held?.abort(); port.pause(); sync(); },
     async toggle() { if (port.paused) await player.play(); else player.pause(); },
     seekTo(seconds) {
       const max = port.duration || Infinity;
+      soughtAfterEnd = soughtAfterEnd || !!port.ended;
       port.currentTime = clamp(seconds, 0, max);
       sync();
     },
