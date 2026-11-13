@@ -44,10 +44,13 @@
 .zs-bar-sticky { position: sticky; }
 .zs-bar-fixed { position: fixed; left: 0; right: 0; }
 .zs-bar-in { max-width: 42rem; margin: 0 auto; }
-.zs-track { position: relative; height: 28px; }
-.zs-seek { width: 100%; margin: 0; height: 28px; accent-color: var(--zs-accent); }
+/* The seek bar is a 44 px touch target (the bar drawn in its middle looks as before). It cannot
+   grow upward into the buttons' own 44 px, so it grows down over the time readout, which takes
+   no taps: the track keeps 36 px of layout and the input spills 8 px over the times row. */
+.zs-track { position: relative; height: 44px; margin-bottom: -8px; }
+.zs-seek { position: relative; z-index: 1; display: block; width: 100%; margin: 0; height: 44px; accent-color: var(--zs-accent); }
 .zs-ghost {
-  position: absolute; top: 6px; width: 3px; height: 16px; margin-left: -1px; border-radius: 2px;
+  position: absolute; z-index: 2; top: 14px; width: 3px; height: 16px; margin-left: -1px; border-radius: 2px;
   background: var(--zs-dim); opacity: 0; pointer-events: none;
 }
 .zs-dragging .zs-ghost { opacity: 0.7; }

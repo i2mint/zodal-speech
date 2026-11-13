@@ -317,3 +317,15 @@ describe('the one-file bundle', () => {
     expect((page as { got?: string }).got).toBe('function');
   });
 });
+
+describe('touch targets', () => {
+  it('gives the seek bar a 44 px hit area without growing it into the buttons above', () => {
+    // A phone page review (2026-11-13): the bar was 28 px, the rule is 44 px. Measured in Chromium
+    // and WebKit at 390 px: the input spans 44 px and the controls row ends where the track starts.
+    const css = readFileSync(join(__dirname, '../src/styles.css'), 'utf8');
+    const rule = (sel: string) => css.match(new RegExp(`\\${sel} \\{([^}]*)\\}`))?.[1] ?? '';
+    expect(rule('.zs-seek')).toMatch(/height:\s*44px/);
+    expect(rule('.zs-track')).toMatch(/height:\s*44px/);
+    expect(rule('.zs-track')).not.toMatch(/margin-top:\s*-/);
+  });
+});
