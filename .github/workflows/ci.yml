@@ -17,6 +17,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: true
 
+# pnpm/action-setup puts its store under a node_modules path; a git-hosted dependency prepared
+# there (@zodal/media, until it is on npm) then fails its d.ts build ("Error parsing src/*.ts").
+# A store outside node_modules avoids it. Remove once @zodal/media comes from npm.
+env:
+  npm_config_store_dir: /home/runner/.pnpm-store
+
 jobs:
   validate:
     runs-on: ubuntu-latest
