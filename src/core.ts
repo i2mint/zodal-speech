@@ -183,16 +183,33 @@ export function createSpeechPlayer(cues: readonly CueLike[], audio: AudioPort, c
     if (started && typeof started.catch === 'function') started.catch(() => say('Tap play to start.', true));
   };
 
+  // A play held until its seek lands (after the end, on Safari): a tap on Play meanwhile means pause.
+  let held: AbortController | null = null;
+  const release = () => {
+    held?.abort();
+    held = null;
+  };
+
   const toggle = () => {
-    if (!audio.paused) audio.pause();
+    if (held) release();
+    else if (!audio.paused) audio.pause();
     else start();
   };
 
   const seek = (time: number, options: { play?: boolean } = {}) => {
     const { duration } = store.getState();
     const to = Math.max(0, Math.min(duration, time));
-    if (options.play && audio.paused) void seekThenPlay(audio, to, { play: start });
-    else audio.currentTime = to;
+    release();
+    if (options.play && audio.paused) {
+      const mine = new AbortController();
+      held = mine;
+      seekThenPlay(audio, to, { play: start, signal: mine.signal }).then(
+        () => { if (held === mine) held = null; },
+        () => undefined, // cancelled: nothing to play
+      );
+    } else {
+      audio.currentTime = to;
+    }
     tick();
   };
 

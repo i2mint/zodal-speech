@@ -26,27 +26,44 @@ export interface SeekablePort {
   removeEventListener?(type: 'seeked', listener: () => void): void;
 }
 
-/** Play anyway if a seek never reports that it landed. */
+/** Play anyway after this long, if no seek is under way by then (a seek still landing is still awaited). */
 export const SEEK_LAND_TIMEOUT_MS = 1500;
 
 export interface SeekThenPlayOptions {
   /** What starting playback means; defaults to `port.play()`. A player passes its own, to catch a refusal. */
   play?: () => Promise<void> | void;
   timeoutMs?: number;
+  /** Cancels a play held for its seek (a pause meanwhile): the promise rejects with an AbortError. */
+  signal?: AbortSignal;
+}
+
+function abortError(): Error {
+  const e = new Error('The play was cancelled while its seek was landing.');
+  e.name = 'AbortError';
+  return e;
 }
 
 /** Resolves once `port`'s seek has landed (`seeked`), or at once when no seek is landing. */
-export function seekLanded(port: SeekablePort, { timeoutMs = SEEK_LAND_TIMEOUT_MS } = {}): Promise<void> {
+export function seekLanded(
+  port: SeekablePort,
+  { timeoutMs = SEEK_LAND_TIMEOUT_MS, signal }: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<void> {
+  if (signal?.aborted) return Promise.reject(abortError());
   if (!port.seeking || !port.addEventListener) return Promise.resolve();
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const done = () => {
+    const settle = () => {
       clearTimeout(timer);
-      port.removeEventListener?.('seeked', done);
-      resolve();
+      port.removeEventListener?.('seeked', landed);
+      signal?.removeEventListener('abort', aborted);
     };
-    timer = setTimeout(done, timeoutMs);
-    port.addEventListener!('seeked', done);
+    const landed = () => { settle(); resolve(); };
+    const aborted = () => { settle(); reject(abortError()); };
+    // Playing while the seek is still under way is the bug itself, so the timer only ends a wait
+    // whose seek is over without a `seeked` (a source that went away).
+    timer = setTimeout(() => { if (!port.seeking) landed(); }, timeoutMs);
+    port.addEventListener!('seeked', landed);
+    signal?.addEventListener('abort', aborted);
   });
 }
 
