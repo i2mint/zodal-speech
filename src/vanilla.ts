@@ -5,7 +5,7 @@
  * `destroy()` removes every listener it added. Import `@zodal/speech/styles.css` beside it.
  */
 import { createSpeechPlayer, cuesDuration, formatTime, type CueLike, type SpeechPlayer } from './core.js';
-import { attachFollow, createFollow } from '@zodal/media/follow';
+import { attachFollow, createFollow, scrollerOf } from '@zodal/media/follow';
 
 /** The track as this renderer reads it. Validate with `parseSpeechTrack` where data is untrusted. */
 export interface MountTrack {
@@ -33,8 +33,8 @@ export interface MountOptions {
   /** Offers the audio as a download. */
   download?: boolean;
   /**
-   * What scrolls the transcript into view: the page (the default) or a box of its own. Only it
-   * moves, never a page or frame around it.
+   * What scrolls the transcript into view: by default the nearest scrolling ancestor, else the
+   * page. Only it moves, never a page or frame around it.
    */
   scroller?: HTMLElement;
 }
@@ -223,7 +223,8 @@ export function mountSpeechPlayer(host: HTMLElement, track: MountTrack, options:
   // Scrolling by hand stops the following; the page's own smooth scroll does not. Only the
   // scroller moves: scrollIntoView also scrolled the page around a frame (annals, 2026-11-13).
   const doc = host.ownerDocument;
-  const scroller = options.scroller ?? ((doc.scrollingElement ?? doc.documentElement) as HTMLElement);
+  // The nearest scrolling ancestor at mount (hailing's app scrolls a `main` box), else the page.
+  const scroller = options.scroller ?? scrollerOf(host);
   const follow = createFollow({ following: store.getState().following });
   const followView = attachFollow(scroller, follow, { anchor: 0.5, ownScrollMs: OWN_SCROLL_MS, scrollKeys: SCROLL_KEYS });
   const unfollow = follow.subscribe(({ following }) => {

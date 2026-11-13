@@ -62,7 +62,8 @@
     "build": "tsup && node scripts/emit-schema.mjs",
     "prepare": "tsup && node scripts/emit-schema.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "node scripts/check-dist.mjs"
   },
   "dependencies": {
     "immer": "^10.1.1",
